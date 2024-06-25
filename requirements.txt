@@ -1,0 +1,6 @@
+Flask
+Flask-SocketIO
+simple-websocket
+gevent
+gevent-websocket
+fastcore
