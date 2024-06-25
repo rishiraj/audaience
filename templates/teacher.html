@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>audAIence - Teacher Interface</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body {
+            font-family: 'Arial', sans-serif;
+            line-height: 1.6;
+            color: #333;
+            margin: 0;
+            padding: 20px;
+            background-color: #f4f4f4;
+        }
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            background-color: #ffffff;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+        }
+        h1, h2 {
+            color: #2c3e50;
+        }
+        .stats {
+            display: flex;
+            justify-content: space-around;
+            margin-bottom: 20px;
+        }
+        .stat-item {
+            text-align: center;
+        }
+        .stat-value {
+            font-size: 2em;
+            font-weight: bold;
+            color: #3498db;
+        }
+        #pieChart {
+            max-width: 400px;
+            margin: 0 auto;
+        }
+        .file-upload {
+            margin-bottom: 20px;
+        }
+        #uploadSlides {
+            background-color: #2ecc71;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        #uploadSlides:hover {
+            background-color: #27ae60;
+        }
+        #questionList {
+            margin-top: 20px;
+        }
+        .question-item {
+            background-color: #ecf0f1;
+            padding: 10px;
+            margin-bottom: 10px;
+            border-radius: 5px;
+        }
+        .question-actions {
+            margin-top: 10px;
+        }
+        .action-btn {
+            padding: 5px 10px;
+            margin-right: 10px;
+            border: none;
+            border-radius: 3px;
+            cursor: pointer;
+        }
+        .solve-btn { background-color: #3498db; color: white; }
+        .submit-btn { background-color: #e67e22; color: white; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>audAIence Teacher Interface</h1>
+        <div class="stats">
+            <div class="stat-item">
+                <div class="stat-value" id="totalStudents">{{ student_count }}</div>
+                <div>Total Students</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-value" id="activeStudents">{{ active_student_count }}</div>
+                <div>Active Students</div>
+            </div>
+        </div>
+        <canvas id="pieChart"></canvas>
+        <div class="file-upload">
+            <input type="file" id="slidesFile" accept=".pdf">
+            <button id="uploadSlides">Upload Slides</button>
+        </div>
+        <h2>Questions</h2>
+        <div id="questionList"></div>
+    </div>
+
+    <script>
+        const socket = io();
+        let pieChart;
+
+        // Initialize pie chart
+        function initPieChart() {
+            const ctx = document.getElementById('pieChart').getContext('2d');
+            pieChart = new Chart(ctx, {
+                type: 'pie',
+                data: {
+                    labels: ['Understanding', 'Unsure', 'Lost'],
+                    datasets: [{
+                        data: [
+                            {{ color2frac.get('green', 0) }},
+                            {{ color2frac.get('yellow', 0) }},
+                            {{ color2frac.get('red', 0) }}
+                        ],
+                        backgroundColor: ['#2ecc71', '#f1c40f', '#e74c3c']
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    title: {
+                        display: true,
+                        text: 'Student Understanding'
+                    }
+                }
+            });
+        }
+
+        initPieChart();
+
+        // Handle slide upload
+        document.getElementById('uploadSlides').addEventListener('click', () => {
+            const file = document.getElementById('slidesFile').files[0];
+            if (file) {
+                const formData = new FormData();
+                formData.append('file', file);
+                fetch('/{{ class_id }}/upload_slides', {
+                    method: 'POST',
+                    body: formData
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.message) {
+                        alert('Slides uploaded successfully!');
+                    } else {
+                        alert('Error uploading slides: ' + data.error);
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    alert('An error occurred while uploading slides.');
+                });
+            } else {
+                alert('Please select a file to upload.');
+            }
+        });
+
+        // Handle new questions
+        socket.on('new_question', (data) => {
+            const questionList = document.getElementById('questionList');
+            const questionItem = document.createElement('div');
+            questionItem.className = 'question-item';
+            questionItem.innerHTML = `
+                <p><strong>Q:</strong> ${data.question}</p>
+                ${data.answer ? `<p><strong>A:</strong> ${data.answer}</p>` : ''}
+                <div class="question-actions">
+                    <button class="action-btn solve-btn">Mark as Solved</button>
+                    <button class="action-btn submit-btn">Submit to Speaker</button>
+                </div>
+            `;
+            questionList.appendChild(questionItem);
+        });
+
+        // Update stats and chart (you'll need to implement the server-side events for these)
+        socket.on('update_stats', (data) => {
+            document.getElementById('totalStudents').textContent = data.totalStudents;
+            document.getElementById('activeStudents').textContent = data.activeStudents;
+            
+            pieChart.data.datasets[0].data = [
+                data.colorFractions.green,
+                data.colorFractions.yellow,
+                data.colorFractions.red
+            ];
+            pieChart.update();
+        });
+    </script>
+</body>
+</html>
