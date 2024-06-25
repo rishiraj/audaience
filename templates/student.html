@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>audAIence - Student Interface</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+    <style>
+        body {
+            font-family: 'Arial', sans-serif;
+            line-height: 1.6;
+            color: #333;
+            margin: 0;
+            padding: 20px;
+            background-color: #f4f4f4;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background-color: #ffffff;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #2c3e50;
+            text-align: center;
+        }
+        .color-buttons {
+            display: flex;
+            justify-content: space-around;
+            margin-bottom: 20px;
+        }
+        .color-btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: opacity 0.3s;
+        }
+        .color-btn:hover {
+            opacity: 0.8;
+        }
+        #greenBtn { background-color: #2ecc71; }
+        #yellowBtn { background-color: #f1c40f; }
+        #redBtn { background-color: #e74c3c; }
+        #question {
+            width: 100%;
+            padding: 10px;
+            margin-bottom: 10px;
+            border: 1px solid #bdc3c7;
+            border-radius: 5px;
+        }
+        #submitQuestion {
+            background-color: #3498db;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        #submitQuestion:hover {
+            background-color: #2980b9;
+        }
+        #questionList {
+            margin-top: 20px;
+        }
+        .question-item {
+            background-color: #ecf0f1;
+            padding: 10px;
+            margin-bottom: 10px;
+            border-radius: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>audAIence Student Interface</h1>
+        <div class="color-buttons">
+            <button id="greenBtn" class="color-btn">I understand</button>
+            <button id="yellowBtn" class="color-btn">I'm unsure</button>
+            <button id="redBtn" class="color-btn">I'm lost</button>
+        </div>
+        <textarea id="question" placeholder="Type your question here..."></textarea>
+        <button id="submitQuestion">Submit Question</button>
+        <div id="questionList"></div>
+    </div>
+
+    <script>
+        const socket = io();
+        const classId = '{{ class_id }}';
+        const timestamp = {{ timestamp }};
+
+        socket.on('connect', () => {
+            socket.emit('register_student', timestamp, classId);
+        });
+
+        document.querySelectorAll('.color-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                socket.emit('color_change', btn.id.replace('Btn', ''));
+            });
+        });
+
+        document.getElementById('submitQuestion').addEventListener('click', () => {
+            const question = document.getElementById('question').value;
+            if (question.trim()) {
+                socket.emit('submit_question', classId, question);
+                document.getElementById('question').value = '';
+            }
+        });
+
+        socket.on('new_question', (data) => {
+            const questionList = document.getElementById('questionList');
+            const questionItem = document.createElement('div');
+            questionItem.className = 'question-item';
+            questionItem.innerHTML = `
+                <p><strong>Q:</strong> ${data.question}</p>
+                ${data.answer ? `<p><strong>A:</strong> ${data.answer}</p>` : ''}
+            `;
+            questionList.appendChild(questionItem);
+        });
+
+        socket.on('deactivate_old_tabs', (data) => {
+            if (data.timestamp > timestamp) {
+                alert('This tab is now inactive. Please use the most recent tab.');
+                document.body.innerHTML = '<h1>This tab is inactive. Please close it.</h1>';
+            }
+        });
+    </script>
+</body>
+</html>
