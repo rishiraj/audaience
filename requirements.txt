@@ -4,3 +4,5 @@ simple-websocket
 gevent
 gevent-websocket
 fastcore
+google-generativeai
+pdf2image
