@@ -7,6 +7,8 @@ from fastcore.utils import *
 from urllib.parse import urlparse
 import google.generativeai as genai
 from werkzeug.utils import secure_filename
+from pdf2image import convert_from_path
+import tempfile
 
 app = Flask(__name__)
 app.config['UPLOAD_FOLDER'] = 'uploads/'
@@ -23,19 +25,6 @@ def upload_to_gemini(path, mime_type=None):
     print(f"Uploaded file '{file.display_name}' as: {file.uri}")
     return file
 
-def wait_for_files_active(files):
-    print("Waiting for file processing...")
-    for name in (file.name for file in files):
-        file = genai.get_file(name)
-        while file.state.name == "PROCESSING":
-            print(".", end="", flush=True)
-            time.sleep(10)
-            file = genai.get_file(name)
-        if file.state.name != "ACTIVE":
-            raise Exception(f"File {file.name} failed to process")
-    print("...all files ready")
-    print()
-
 generation_config = {
     "temperature": 1,
     "top_p": 0.95,
@@ -45,7 +34,7 @@ generation_config = {
 }
 
 model = genai.GenerativeModel(
-    model_name="gemini-1.5-pro-2m-latest",
+    model_name="gemini-1.5-flash",
     generation_config=generation_config,
 )
 
@@ -77,10 +66,21 @@ def upload_slides(class_id):
         filename = secure_filename(file.filename)
         file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
         file.save(file_path)
-        uploaded_file = upload_to_gemini(file_path, mime_type="application/pdf")
-        wait_for_files_active([uploaded_file])
-        class2slides[class_id] = uploaded_file
-        return jsonify({"message": "File uploaded successfully"}), 200
+        
+        # Convert PDF to images
+        images = convert_from_path(file_path)
+        
+        # Upload images to Gemini
+        uploaded_files = []
+        with tempfile.TemporaryDirectory() as temp_dir:
+            for i, image in enumerate(images):
+                image_path = os.path.join(temp_dir, f'page_{i+1}.png')
+                image.save(image_path, 'PNG')
+                uploaded_file = upload_to_gemini(image_path, mime_type="image/png")
+                uploaded_files.append(uploaded_file)
+        
+        class2slides[class_id] = uploaded_files
+        return jsonify({"message": "File uploaded and converted successfully"}), 200
     else:
         return jsonify({"error": "Invalid file type. Please upload a PDF."}), 400
 
@@ -106,7 +106,7 @@ def handle_disconnect():
 @socketio.on('submit_question')
 def handle_question(class_id, question):
     if class_id in class2slides:
-        chat_session = model.start_chat(history=[{"role": "user", "parts": [class2slides[class_id]]}])
+        chat_session = model.start_chat(history=[{"role": "user", "parts": class2slides[class_id]}])
         response = chat_session.send_message(question)
         class2questions[class_id].append({
             "question": question,
